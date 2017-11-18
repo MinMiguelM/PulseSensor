@@ -13,8 +13,8 @@ const char* password = "1234567890";
 
 // MQTT Server
 const char* server = "192.168.43.186";
-const char* token = "WUUYXIGsRChZP5SzFeFN";
 const int port = 1883;
+char topic[50];
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -28,18 +28,19 @@ int lastTime = 0;
 bool BPMTiming = false;
 bool beatComplete = false;
 int BPM = 0;
+String clientId;
 
 // Constants
-const int pinBuzzer = 13;
+const int pinBuzzer = D7;
 
 void setup_wifi() {
   WiFi.begin(ssid, password);
-  
+
+  oled.clearDisplay();
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
   }
   
-  oled.clearDisplay();
   digitalWrite(LED_BUILTIN, LOW);
 }
 
@@ -50,9 +51,7 @@ void reconnect() {
       digitalWrite(LED_BUILTIN, HIGH);
       setup_wifi();
     }
-    String clientId = "ESP8266Client-";
-    clientId += String(random(0xffff), HEX);
-    if (client.connect(clientId.c_str(),token,NULL)) {
+    if (client.connect(clientId.c_str())) {
       Serial.println("Connected to MQTT Server");
       break;
     } else {
@@ -61,27 +60,24 @@ void reconnect() {
   }
 }
 
-void callback(char* topic, byte* payload, unsigned int length) {
-  char rateStr[length];
-  for(int i = 0;i < length;i++)
-    rateStr[i] = (char)payload[i];
-  int rate = atoi(rateStr);
-  Serial.println(rate);
-  delay(10);
-}
-
 void setup() {
   Serial.begin(115200);
   delay(100);
   pinMode(A0, INPUT);
+  pinMode(pinBuzzer, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
 
   oled.begin(SSD1306_SWITCHCAPVCC, OLED_Address);
   oled.setTextSize(2);
+
+  clientId = "ESP8266Client-0000001";
   
   setup_wifi();
   client.setServer(server, port);
+
+  String topic_str = "sensor/"+clientId+"/pulse";
+  topic_str.toCharArray(topic,50);
   //client.setCallback(callback);
 }
 
@@ -133,12 +129,12 @@ void loop() {
   } else {
     String payload = "{";
     payload += "\"signal\":"; payload += String(pulse); payload += ",";
-    payload += "\"BPM\":"; payload += String(BPM);
+    payload += "\"bpm\":"; payload += String(BPM);
     payload += "}";
     char attributes[100];
     payload.toCharArray( attributes, 100 );
-    Serial.println(payload);
-    client.publish("v1/devices/me/telemetry",attributes);
+    //Serial.println(payload);
+    client.publish(topic,attributes);
   }
   client.loop();
 }
